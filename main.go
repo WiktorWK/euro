@@ -4,9 +4,11 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"math/rand"
 	"net/http"
 	"os"
 	"os/signal"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -23,8 +25,6 @@ type Resoult struct {
 func getResuolts(ctx context.Context) []Resoult {
 	today := time.Now()
 	url := fmt.Sprintf("https://megalotto.pl/wyniki/eurojackpot/losowania-od-3-Stycznia-2017-do-%d-%d-%d", today.Day(), today.Month(), today.Year())
-
-	fmt.Println(url)
 
 	res, err := http.Get(url)
 	if err != nil {
@@ -93,18 +93,18 @@ func getStatistics(resoults []Resoult) Statistics {
 	}
 
 	for _, r := range resoults {
-		for _, mN := range stats.mainNums {
+		for i, mN := range stats.mainNums {
 			for _, rN := range r.mainNum {
 				if mN.num == rN {
-					mN.count++
+					stats.mainNums[i].count++
 				}
 			}
 		}
 
-		for _, sN := range stats.subNums {
+		for i, sN := range stats.subNums {
 			for _, rN := range r.subNum {
 				if sN.num == rN {
-					sN.count++
+					stats.subNums[i].count++
 				}
 
 			}
@@ -112,6 +112,56 @@ func getStatistics(resoults []Resoult) Statistics {
 	}
 
 	return stats
+}
+
+func printStats(stats Statistics) {
+	fmt.Printf("mainNums: \n")
+	for _, mN := range stats.mainNums {
+		fmt.Printf("%+3v\n", mN)
+	}
+	fmt.Printf("\nsubNums: \n")
+	for _, sN := range stats.subNums {
+		fmt.Printf("%+4v\n", sN)
+	}
+}
+
+func getRandomNumbers() ([5]int, [2]int) {
+	randMainNum := [5]int{}
+	randSubNum := [2]int{}
+
+	for i := 0; i < 5; i++ {
+		r := rand.Intn(50-1) + 1
+		for slices.Contains(randMainNum[:], r) {
+			r = rand.Intn(50-1) + 1
+		}
+		randMainNum[i] = r
+	}
+
+	for i := 0; i < 2; i++ {
+		r := rand.Intn(12-1) + 1
+		for slices.Contains(randSubNum[:], r) {
+			r = rand.Intn(12-1) + 1
+		}
+		randSubNum[i] = r
+	}
+
+	return randMainNum, randSubNum
+}
+
+func isRandMainNumOri(randMain [5]int, resoults []Resoult) bool {
+	for _, r := range resoults {
+		set := slices.Concat(randMain[:], r.mainNum[:])
+		slices.Sort(set)
+		set = slices.Compact(set)
+		if len(set) < 8 {
+			return false
+		}
+	}
+	return true
+}
+
+func checkRandNum(ranMainNum [5]int, ranSubNum [2]int, resoults []Resoult, stats Statistics) bool {
+	return isRandMainNumOri(ranMainNum, resoults)
 }
 
 func run(ctx context.Context, w io.Writer) error {
@@ -123,7 +173,23 @@ func run(ctx context.Context, w io.Writer) error {
 
 	stats := getStatistics(res)
 
-	fmt.Println(stats)
+	printStats(stats)
+
+	randMain, randSub := getRandomNumbers()
+
+	fmt.Println("\n\n", "first:\n", randMain, randSub)
+
+	isOK := checkRandNum(randMain, randSub, res, stats)
+
+	for !isOK {
+		randMain, randSub = getRandomNumbers()
+
+		fmt.Println("\n\n", "repeated:\n", randMain, randSub)
+
+		isOK = checkRandNum(randMain, randSub, res, stats)
+	}
+
+	fmt.Println("\n\n", "final: \n", randMain, randSub)
 
 	return nil
 }
