@@ -189,6 +189,9 @@ func run(ctx context.Context, w io.Writer) error {
 		isOK = checkRandNum(randMain, randSub, res, stats)
 	}
 
+	slices.Sort(randMain[:])
+	slices.Sort(randSub[:])
+
 	fmt.Println("\n\n", "final: \n", randMain, randSub)
 
 	return nil
